@@ -1,2 +1,13 @@
-requests
-PyYAML
+altgraph==0.17.5
+-e git+https://github.com/gcurrier/anythingllm-document-sync.git@f79cd375e21ee12c9da16351d7f5d4083cc78fa5#egg=anythingllm_document_sync
+certifi==2026.1.4
+charset-normalizer==3.4.4
+idna==3.11
+packaging==25.0
+pathspec==1.0.3
+pyinstaller==6.18.0
+pyinstaller-hooks-contrib==2025.11
+PyYAML==6.0.3
+requests==2.32.5
+setuptools==80.9.0
+urllib3==2.6.3
