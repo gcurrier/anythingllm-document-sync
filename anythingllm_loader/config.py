@@ -27,9 +27,20 @@ class AnythingLLMConfig:
         self.workspace_slug = workspace_slug
 
     @staticmethod
-    def load_config():
-        if os.path.exists(CONFIG_DIR / CONFIG_FILE):
-            with open(CONFIG_DIR / CONFIG_FILE, "r") as f:
+    def load_config(config_path: str | None = None):
+        # Determine the path
+        if config_path is None:
+            config_file = CONFIG_DIR / CONFIG_FILE
+            # Auto-create default dir if missing
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        else:
+            config_file = pathlib.Path(config_path).resolve()
+            # Auto-create parent dir for custom path if missing
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # Now load
+        if config_file.exists():
+            with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
 
                 # check whether api-key is present, fail if not
@@ -47,7 +58,7 @@ class AnythingLLMConfig:
                 if "workspace-slug" not in config:
                     raise KeyError("Workspace slug not found in config file")
         else:
-            raise FileNotFoundError(str(CONFIG_DIR) + "/" + CONFIG_FILE + " file not found")
+            raise FileNotFoundError(f"{config_file} file not found. Create it first with required fields.")
 
         return AnythingLLMConfig(config["api-key"], config["file-paths"], config["directory-excludes"],
                                  config["file-excludes"], config["workspace-slug"])
