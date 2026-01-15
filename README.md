@@ -1,96 +1,179 @@
-# AnythingLLM Document Loader
+# AnythingLLM Document Sync Tool
 
-A Python utility for managing document ingestion into AnythingLLM workspaces. 
-This tool automates the process of uploading, embedding, and managing documents for use with AnythingLLM.
+A Python utility for managing document ingestion into AnythingLLM workspaces.  
+This tool automates uploading, embedding, and remote cleanup of documents — keeping your workspace in sync with local files.
+
+**Important**: This tool **never** deletes, moves, or modifies any local files on your system.  
+All operations are remote-only (uploads, embeddings, un-embedding/unloading via API).
 
 ## Features
 
-- **Automatic Document Discovery**: Recursively scans directories for supported document types
-- **Smart Document Management**: Only uploads new or modified documents
-- **Document Tracking**: Maintains a local database to track document status
-- **Cleanup Functionality**: Removes documents from AnythingLLM that no longer exist locally
-- **Configurable**: Supports file and directory exclusions
+- **Automatic Document Discovery**: Recursively scans configured paths for supported file types
+- **Smart Sync**: Uploads only new or modified documents; embeds only what's needed
+- **Per-Workspace Tracking**: Separate local SQLite database per workspace (`uploaded-docs-<slug>.db`)
+- **Config-Driven Exclusions**: File and directory excludes defined in YAML config (no automatic .gitignore)
+- **Remote Cleanup**: Automatically removes remote embeddings/unloads for files no longer present locally
+- **Purge Commands**: `--purge` removes all workspace embeddings; `--purge-raw` also deletes tracked raw uploads from storage
+- **Verbose Logging**: Detailed file-by-file scanning with `--verbose`
+- **Force Re-sync**: `--force` clears tracking DB and re-processes everything
+- **One-Click Installer**: `install.sh` handles venv, deps, binary build, PATH setup, and config template
+- **Standalone Binary**: Built as a single executable for easy use on servers or other machines
+- **Logging**: Console progress + persistent log in `~/.anythingllm-sync/log/sync.log`
 
 ## Requirements
 
-- Tested with Python 3.12.7
-- AnythingLLM instance
-- Required Python packages:
-  - requests
-  - PyYAML
+- Python 3.10+ (tested with 3.12)
+- AnythingLLM instance (default: http://localhost:3001)
+- macOS prerequisites (via Homebrew):
+  ```shell
+  brew install pyenv sqlite
+  ```
+- Python packages: `requests`, `PyYAML`, `pyinstaller` (installed by script)
 
 ## Installation
 
-Instructions below are for macOS.
+### Recommended: One-command installer (macOS/Linux)
 
-1. Install prerequisites
+From the project root:
 
 ```shell
-# Data about the files which have been uploaded is stored in an sqlite database
-brew install sqlite
-# Python virtual environments
-brew install pyenv
+chmod +x install.sh
+./install.sh
 ```
 
-2. Create and activate a python virtual environment
+This script does everything:
+- Creates/activates virtual environment (`.venv`)
+- Installs dependencies
+- Installs the package editable
+- Builds the standalone binary
+- Creates `~/.anythingllm-sync/` + default `config.yaml` template + `log/` dir
+- Moves binary to `~/bin/anythingllm-sync`
+- Adds `~/bin` to PATH (in `.bashrc`/`.zshrc` if missing)
+
+After running:
+- Reload shell: `source ~/.bashrc` (or `~/.zshrc`)
+- Test: `anythingllm-sync --help`
+
+### Manual / Development Install
+
+1. Create and activate virtual environment:
 
 ```shell
-pyenv install 3.12.7 
+pyenv install 3.12.7
 pyenv local 3.12.7
-pyenv exec python3 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 ```
 
-2. Install python libraries
+2. Install dependencies and package:
 
 ```shell
 pip install -r requirements.txt
+pip install -e .
 ```
+
+3. (Optional) Build standalone binary manually:
+
+```shell
+pip install pyinstaller
+pyinstaller \
+  --onefile \
+  --name anythingllm-sync \
+  --add-data "anythingllm_loader:anythingllm_loader" \
+  --add-data "anythingllm_sync:anythingllm_sync" \
+  --clean \
+  anythingllm_sync/ingest_anythingllm_docs.py
+```
+
+- Binary: `dist/anythingllm-sync`
+- Move to PATH: `mv dist/anythingllm-sync ~/bin/ && chmod +x ~/bin/anythingllm-sync`
 
 ## Configuration
 
-Create a configuration file in ~/.anythingllm-sync/config.yaml.
+All config files live in `~/.anythingllm-sync/` (created automatically).
+
+### Default config (auto-created template if missing)
+
+`~/.anythingllm-sync/config.yaml`
 
 ```yaml
-api-key: WFSDFD-ASDAFDFD-Q8M53TR-AAAAS48
-workspace-slug: aws
+# AnythingLLM Document Sync Configuration
+api-key: YOUR_ANYTHINGLLM_API_KEY_HERE
+workspace-slug: your-workspace-slug-here
+
 file-paths:
- - /Users/username/Documents/
+  - /home/user/path/to/your/repo-or-folder
+  # Add more absolute paths as needed
+
 directory-excludes:
- - .obsidian
+  - .git
+  - venv
+  - node_modules
+  - __pycache__
+
 file-excludes:
- - .DS_Store
+  - "*.log"
+  - "*.tmp"
 ```
 
-To fetch the API Key, from the AnythingLLM Desktop application:
-1. Click on the spanner icon at the bottom right of the left-hand navigation, to open settings
-2. Under the Tools heading, select Developer API
-3. Click on "Generate New API Key"
+- **api-key**: AnythingLLM → Settings → Developer API → Generate New API Key
+- **workspace-slug**: Workspace settings → Vector Database → "Vector database identifier"
+- Exclusions apply only to `file-paths` — no automatic `.gitignore` support
 
-To fetch the workspace slug:
-1. From the AnythingLLM start screen, click the workspace in the left-hand navigation, and then click on the settings cog icon
-2. Click the "Vector Database" tab
-3. The "Vector database identifier" is the same as the workspace slug
+### Multiple workspaces
+
+Create additional files in the same directory, e.g.:
+
+- `~/.anythingllm-sync/qpredict.yaml`
+- `~/.anythingllm-sync/aws-prod.yaml`
+
+Run with: `anythingllm-sync --config qpredict.yaml`
 
 ## Usage
 
-Run the main script to process documents:
+Basic sync (default config):
 
 ```shell
-python ingest_anythingllm_docs.py
+anythingllm-sync
 ```
 
-The script will:
-1. Scan configured directories (configured as file-paths) for documents
-2. Upload new or modified documents to AnythingLLM.  The script stores a sqlite database in ~/.anythingllm-sync/uploaded-docs.db to keep a record of uploaded files.
-3. Embed documents that have been uploaded but not yet embedded
-4. Remove documents from AnythingLLM that no longer exist locally
+With custom config + details:
+
+```shell
+anythingllm-sync --config qpredict.yaml --verbose
+```
+
+Common commands:
+
+```shell
+# Force full re-sync (ignores previous tracking)
+anythingllm-sync --force --verbose
+
+# Purge all embeddings from workspace (remote only)
+anythingllm-sync --purge --verbose
+
+# Purge embeddings + delete tracked raw files from storage
+anythingllm-sync --purge --purge-raw --verbose
+```
+
+## Logging
+
+- Console: High-level progress + warnings/errors
+- With `--verbose`: File-by-file include/skip details
+- Persistent log: `~/.anythingllm-sync/log/sync.log` (rotating, 5 MB max, 3 backups)
 
 ## Project Structure
 
-- `ingest_anythingllm_docs.py`: Main script for document processing
-- `anythingllm_loader/`: Package containing core functionality
-  - `anythingllm_api.py`: API client for AnythingLLM
-  - `config.py`: Configuration handling
-  - `database.py`: Local document tracking database
+- `ingest_anythingllm_docs.py`: Main script (entry point)
+- `anythingllm_loader/`: Core package (API, config, DB)
+- `anythingllm_sync/`: Package wrapper for main script
+- `install.sh`: One-command installer (venv, deps, binary, PATH, config setup)
+- `requirements.txt`: Frozen dependencies
+
+## Notes
+
+- Fork enhancements: per-workspace DB, purge commands, verbose output, improved logging, remote-only cleanup language, one-command installer, standalone binary support.
+- Never modifies local files — only interacts with AnythingLLM via API.
+- For production: use the standalone binary created by `install.sh`.
+- For development: keep editable install (`pip install -e .`).
