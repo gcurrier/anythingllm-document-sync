@@ -1,5 +1,4 @@
 altgraph==0.17.5
--e git+https://github.com/gcurrier/anythingllm-document-sync.git@f79cd375e21ee12c9da16351d7f5d4083cc78fa5#egg=anythingllm_document_sync
 certifi==2026.1.4
 charset-normalizer==3.4.4
 idna==3.11
