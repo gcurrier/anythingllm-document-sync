@@ -17,17 +17,17 @@ class AnythingLLMDocument:
 
 
 class DocumentDatabase:
+    def __init__(self, db_path: str):
+        self.db_filename = pathlib.Path(db_path)
 
-    @staticmethod
-    def initialize_database():
-        # if the ~/.anythingllm-sync/ directory doesn't exist, create it
-        if not os.path.exists(CONFIG_DIR):
-            os.makedirs(CONFIG_DIR)
+    def initialize_database(self):
+        # Create parent dir if missing
+        self.db_filename.parent.mkdir(parents=True, exist_ok=True)
 
         """Initialize the database and create tables if they don't exist."""
-        if not os.path.exists(DATABASE_FILENAME):
+        if not self.db_filename.exists():
             try:
-                with sqlite3.connect(DATABASE_FILENAME) as conn:
+                with sqlite3.connect(self.db_filename) as conn:
                     cursor = conn.cursor()
                     cursor.execute('''
                         CREATE TABLE documents (
@@ -41,17 +41,13 @@ class DocumentDatabase:
                     conn.commit()
                 return True
             except sqlite3.Error as e:
-                print(f"Error creating database: {e}")
+                print(f"Error creating database {self.db_filename}: {e}")
                 return False
-            finally:
-                if conn:
-                    conn.close()
         return True
 
-    @staticmethod
-    def get_connection():
+    def get_connection(self):
         """Get a database connection."""
-        return sqlite3.connect(DATABASE_FILENAME)
+        return sqlite3.connect(self.db_filename)
 
     def add_document(self, anything_llm_document: AnythingLLMDocument):
         """Add a document to the database."""
